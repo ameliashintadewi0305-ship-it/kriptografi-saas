@@ -1,18 +1,18 @@
-# Using a slim Python 3.9 base image
-FROM python:3.9-slim
+# Gunakan image Python 3.13 versi slim
+FROM python:3.13-slim
 
-# Set the working directory
+# Atur direktori kerja di dalam container
 WORKDIR /app
 
-# Copy requirements.txt and install dependencies
+# Salin file requirements.txt dan install dependensi
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code
+# Salin semua file kode aplikasi (termasuk folder templates dan static)
 COPY . .
 
-# Expose port 5000
+# Beri tahu Docker bahwa container akan mendengarkan di port 5000
 EXPOSE 5000
 
-# Run the application
-CMD ["flask", "run", "--host=0.0.0.0"]
+# Jalankan aplikasi Anda
+CMD ["python", "app.py"]
