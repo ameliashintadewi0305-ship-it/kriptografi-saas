@@ -4,6 +4,7 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from werkzeug.security import generate_password_hash, check_password_hash
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives.serialization import load_pem_public_key, load_pem_private_key, Encoding, PublicFormat, PrivateFormat, NoEncryption
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from base64 import b64encode, b64decode
@@ -17,6 +18,10 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/site.db'
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
+
+# Perbaikan: Mengganti @app.before_first_request
+with app.app_context():
+    db.create_all()
 
 # User Model
 class User(db.Model, UserMixin):
@@ -34,10 +39,6 @@ class User(db.Model, UserMixin):
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
-
-@app.before_first_request
-def create_tables():
-    db.create_all()
 
 @app.route('/')
 def home():
@@ -69,17 +70,15 @@ def register():
         username = request.form.get('username')
         password = request.form.get('password')
         
-        # Generate new RSA key pair for the user
         private_key = rsa.generate_private_key(
             public_exponent=65537,
             key_size=2048
         )
         public_key = private_key.public_key()
         
-        # Serialize public key to string
         public_key_pem = public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
+            encoding=Encoding.PEM,
+            format=PublicFormat.SubjectPublicKeyInfo
         ).decode('utf-8')
 
         user = User(username=username, public_key=public_key_pem)
@@ -99,48 +98,48 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
-# Endpoint API untuk enkripsi/dekripsi, sekarang membutuhkan otentikasi
+@app.route('/chat/<username>')
+@login_required
+def chat_page(username):
+    recipient = User.query.filter_by(username=username).first()
+    if not recipient:
+        return redirect(url_for('home'))
+    return render_template('chat.html', recipient=recipient)
+
 @app.route('/api/encrypt/<username>', methods=['POST'])
 @login_required
 def encrypt_message(username):
     recipient = User.query.filter_by(username=username).first()
     if not recipient:
         return jsonify({'error': 'Recipient not found'}), 404
-    
+
     data = request.json
     plaintext = data.get('plaintext').encode('utf-8')
-    
+    recipient_public_key = load_pem_public_key(recipient.public_key.encode('utf-8'), backend=default_backend())
+
     aes_key = os.urandom(32)
-    nonce = os.urandom(16)
-    
+    nonce = os.urandom(12) 
+
     cipher = Cipher(algorithms.AES(aes_key), modes.GCM(nonce), backend=default_backend())
     encryptor = cipher.encryptor()
     ciphertext = encryptor.update(plaintext) + encryptor.finalize()
     tag = encryptor.tag
-    
+
+    encrypted_aes_key = recipient_public_key.encrypt(
+        aes_key,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+
     return jsonify({
-        'aes_key': b64encode(aes_key).decode('utf-8'),
+        'encrypted_aes_key': b64encode(encrypted_aes_key).decode('utf-8'),
         'nonce': b64encode(nonce).decode('utf-8'),
         'ciphertext': b64encode(ciphertext).decode('utf-8'),
-        'tag': b64encode(tag).decode('utf-8'),
-        'recipient_public_key': recipient.public_key
+        'tag': b64encode(tag).decode('utf-8')
     })
-
-# Endpoint untuk sign (tanda tangan)
-@app.route('/api/sign', methods=['POST'])
-@login_required
-def sign_message():
-    data = request.json
-    ciphertext = b64decode(data.get('ciphertext'))
-    # Private key should be managed securely, this is for demonstration
-    private_key_pem = "your_private_key_here" # Placeholder, get from user session
-    # ... your signing logic here ...
-    signature = b"dummy_signature"
-
-    return jsonify({
-        'signature': b64encode(signature).decode('utf-8')
-    })
-
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000)

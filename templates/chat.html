@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chat with {{ recipient.username }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Chat with {{ recipient.username }}</h1>
+        <div class="chat-window">
+            </div>
+        <div class="message-input">
+            <input type="text" id="message-input" placeholder="Ketik pesan...">
+            <button onclick="kirimPesan()">Kirim</button>
+        </div>
+        <a href="{{ url_for('home') }}">Kembali ke Dashboard</a>
+    </div>
+
+    <script>
+        // Logika enkripsi dan pengiriman pesan akan ada di sini
+        // Anda harus membuat fungsi JavaScript untuk mengirim pesan ke API endpoint
+        function kirimPesan() {
+            const message = document.getElementById('message-input').value;
+            // ... panggil API endpoint /api/encrypt untuk mengenkripsi pesan ...
+        }
+    </script>
+</body>
+</html>
