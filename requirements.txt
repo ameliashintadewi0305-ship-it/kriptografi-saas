@@ -1,2 +1,5 @@
 Flask
-pycryptodome
+cryptography
+Flask-SQLAlchemy
+Flask-Login
+Werkzeug
