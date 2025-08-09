@@ -4,11 +4,17 @@ FROM python:3.13-slim
 # Atur direktori kerja di dalam container
 WORKDIR /app
 
-# Salin file requirements.txt dan install dependensi
+# Salin file requirements.txt
 COPY requirements.txt .
+
+# Install semua dependensi dari requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Salin semua file kode aplikasi (termasuk folder templates dan static)
+# Pastikan modul cryptography terpasang
+# (Ini bisa jadi langkah yang berlebihan, tapi untuk memastikan)
+RUN pip install --no-cache-dir cryptography
+
+# Salin semua file kode aplikasi
 COPY . .
 
 # Beri tahu Docker bahwa container akan mendengarkan di port 5000
