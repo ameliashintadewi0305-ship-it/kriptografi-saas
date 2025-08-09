@@ -1,114 +1,118 @@
-from flask import Flask, request, jsonify
-from Crypto.Cipher import AES
-from Crypto.Util.Padding import pad, unpad
-from Crypto.PublicKey import RSA
-from Crypto.Signature import pkcs1_15
-from Crypto.Hash import SHA256
-import base64
+from flask import Flask, render_template, request, jsonify
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
+import os
+from base64 import b64encode, b64decode
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 app = Flask(__name__)
 
-# Generate AES Key (for demonstration, in a real app, manage keys securely)
-def generate_aes_key():
-    return AES.get_random_bytes(16) # 128-bit key
+# Kunci dummy untuk User A dan B.
+# Ini harus dibuat sekali dan disimpan dengan aman.
+private_key_a = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+public_key_a = private_key_a.public_key()
 
-# Generate RSA Key Pair (for demonstration, in a real app, manage keys securely)
-def generate_rsa_key():
-    key = RSA.generate(2048) # 2048-bit key
-    public_key = key.publickey().export_key().decode('utf-8')
-    private_key = key.export_key().decode('utf-8')
-    return private_key, public_key
+private_key_b = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+public_key_b = private_key_b.public_key()
 
-# --- EaaS: Encryption as a Service ---
-@app.route('/encrypt', methods=['POST'])
-def encrypt_data():
-    data = request.json.get('plaintext')
-    if not data:
-        return jsonify({"error": "Missing 'plaintext' in request"}), 400
+def get_public_keys():
+    """Mengembalikan kunci publik dalam format yang bisa dikirimkan."""
+    return {
+        'A': public_key_a.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode('utf-8'),
+        'B': public_key_b.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo).decode('utf-8')
+    }
 
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/api/encrypt', methods=['POST'])
+def encrypt_message():
+    data = request.json
+    plaintext = data.get('plaintext').encode('utf-8')
+    
+    # 1. Generate AES key dan nonce
+    aes_key = os.urandom(32)
+    nonce = os.urandom(16)
+    
+    # 2. Enkripsi plaintext dengan AES
+    cipher = Cipher(algorithms.AES(aes_key), modes.GCM(nonce), backend=default_backend())
+    encryptor = cipher.encryptor()
+    ciphertext = encryptor.update(plaintext) + encryptor.finalize()
+    tag = encryptor.tag
+    
+    # 3. Enkripsi AES key dengan public key User B
+    encrypted_aes_key = public_key_b.encrypt(
+        aes_key,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+
+    # 4. Tanda tangani ciphertext dengan private key User A
+    signature = private_key_a.sign(
+        ciphertext,
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH
+        ),
+        hashes.SHA256()
+    )
+    
+    return jsonify({
+        'encrypted_aes_key': b64encode(encrypted_aes_key).decode('utf-8'),
+        'nonce': b64encode(nonce).decode('utf-8'),
+        'ciphertext': b64encode(ciphertext).decode('utf-8'),
+        'tag': b64encode(tag).decode('utf-8'),
+        'signature': b64encode(signature).decode('utf-8')
+    })
+
+@app.route('/api/decrypt', methods=['POST'])
+def decrypt_message():
+    data = request.json
+    encrypted_aes_key = b64decode(data.get('encrypted_aes_key'))
+    nonce = b64decode(data.get('nonce'))
+    ciphertext = b64decode(data.get('ciphertext'))
+    tag = b64decode(data.get('tag'))
+    signature = b64decode(data.get('signature'))
+    
     try:
-        key = generate_aes_key() # Generate a new key for each request
-        cipher = AES.new(key, AES.MODE_GCM)
-        ciphertext, tag = cipher.encrypt_and_digest(pad(data.encode('utf-8'), AES.block_size))
+        # 1. Verifikasi tanda tangan menggunakan public key User A
+        public_key_a.verify(
+            signature,
+            ciphertext,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256()
+        )
+        
+        # 2. Dekripsi AES key menggunakan private key User B
+        aes_key = private_key_b.decrypt(
+            encrypted_aes_key,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
 
+        # 3. Dekripsi pesan
+        cipher = Cipher(algorithms.AES(aes_key), modes.GCM(nonce, tag), backend=default_backend())
+        decryptor = cipher.decryptor()
+        plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+        
         return jsonify({
-            "ciphertext": base64.b64encode(ciphertext).decode('utf-8'),
-            "tag": base64.b64encode(tag).decode('utf-8'),
-            "nonce": base64.b64encode(cipher.nonce).decode('utf-8'),
-            "aes_key": base64.b64encode(key).decode('utf-8') # Send key back (for demo ONLY)
-        }), 200
+            'plaintext': plaintext.decode('utf-8'),
+            'status': 'success'
+        })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# EaaS: Decryption as a Service
-@app.route('/decrypt', methods=['POST'])
-def decrypt_data():
-    ciphertext_b64 = request.json.get('ciphertext')
-    tag_b64 = request.json.get('tag')
-    nonce_b64 = request.json.get('nonce')
-    aes_key_b64 = request.json.get('aes_key')
-
-    if not all([ciphertext_b64, tag_b64, nonce_b64, aes_key_b64]):
-        return jsonify({"error": "Missing required data for decryption"}), 400
-
-    try:
-        ciphertext = base64.b64decode(ciphertext_b64)
-        tag = base64.b64decode(tag_b64)
-        nonce = base64.b64decode(nonce_b64)
-        aes_key = base64.b64decode(aes_key_b64)
-
-        cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
-        plaintext = unpad(cipher.decrypt_and_verify(ciphertext, tag), AES.block_size)
-
-        return jsonify({"plaintext": plaintext.decode('utf-8')}), 200
-    except Exception as e:
-        return jsonify({"error": f"Decryption failed: {str(e)}. Check key, nonce, tag, and ciphertext."}), 400
-
-
-# --- Signing as a Service (SaaS - Digital Signature) ---
-@app.route('/sign', methods=['POST'])
-def sign_data():
-    data = request.json.get('data')
-    if not data:
-        return jsonify({"error": "Missing 'data' to sign"}), 400
-
-    try:
-        private_key_pem, public_key_pem = generate_rsa_key()
-        private_key = RSA.import_key(private_key_pem)
-
-        h = SHA256.new(data.encode('utf-8'))
-        signature = pkcs1_15.new(private_key).sign(h)
-
-        return jsonify({
-            "signature": base64.b64encode(signature).decode('utf-8'),
-            "public_key": public_key_pem,
-            "private_key": private_key_pem # NEVER DO THIS IN PRODUCTION!
-        }), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# --- Verify Signing as a Service (VaaS) ---
-@app.route('/verify', methods=['POST'])
-def verify_signature():
-    data = request.json.get('data')
-    signature_b64 = request.json.get('signature')
-    public_key_pem = request.json.get('public_key')
-
-    if not all([data, signature_b64, public_key_pem]):
-        return jsonify({"error": "Missing 'data', 'signature', or 'public_key' for verification"}), 400
-
-    try:
-        signature = base64.b64decode(signature_b64)
-        public_key = RSA.import_key(public_key_pem)
-
-        h = SHA256.new(data.encode('utf-8'))
-        pkcs1_15.new(public_key).verify(h, signature)
-
-        return jsonify({"message": "Signature is valid"}), 200
-    except (ValueError, TypeError) as e:
-        return jsonify({"message": f"Signature is invalid: {str(e)}"}), 400
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({'status': 'failed', 'error': str(e)})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)
