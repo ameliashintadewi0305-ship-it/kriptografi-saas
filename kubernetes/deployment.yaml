@@ -1,22 +1,17 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: kriptografi-saas-deployment
+# ... (kode deployment yang sudah ada)
+
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: kriptografi-saas
   template:
-    metadata:
-      labels:
-        app: kriptografi-saas
     spec:
       containers:
         - name: kriptografi-saas
-          image: image-registry.openshift-image-registry.svc:5000/amelia2344-dev/kriptografi-saas:latest
+          image: kriptografi-saas:latest
           ports:
             - containerPort: 5000
-          env:
-            - name: DATABASE_PATH
-              value: /tmp/site.db
+          volumeMounts:
+            - name: sqlite-storage
+              mountPath: /tmp
+      volumes:
+        - name: sqlite-storage
+          persistentVolumeClaim:
+            claimName: sqlite-pvc
