@@ -12,7 +12,7 @@ import traceback
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
-db_path = os.environ.get('DATABASE_PATH', '/tmp/site.db')
+db_path = os.environ.get('DATABASE_PATH', '/data/site.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
@@ -122,6 +122,12 @@ def login():
         else:
             flash('Invalid username or password')
     return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
 
 @app.route('/dashboard')
 @login_required
