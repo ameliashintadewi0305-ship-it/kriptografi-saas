@@ -8,6 +8,7 @@ from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
 from Crypto.Hash import SHA256
 from base64 import b64encode, b64decode
+import traceback
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
@@ -49,12 +50,10 @@ def create_keys():
 
 def encrypt_message(message, public_key):
     # Logika enkripsi AES-256 dan RSA
-    # (Kode ini tidak diubah)
     return message
 
 def decrypt_message(encrypted_message, private_key):
     # Logika dekripsi
-    # (Kode ini tidak diubah)
     return encrypted_message
 
 def sign_message(message, private_key):
@@ -76,19 +75,34 @@ def register():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        existing_user = User.query.filter_by(username=username).first()
-        if existing_user:
-            flash('Username already exists. Please choose a different one.')
+        
+        try:
+            existing_user = User.query.filter_by(username=username).first()
+            if existing_user:
+                flash('Username already exists. Please choose a different one.')
+                return redirect(url_for('register'))
+
+            private_key, public_key = create_keys()
+            
+            # Tambahkan print untuk debugging
+            print(f"Generated keys for user {username}:")
+            print(f"Public Key: {public_key[:50]}...")
+            print(f"Private Key: {private_key[:50]}...")
+
+            new_user = User(username=username, public_key=public_key, private_key=private_key)
+            new_user.set_password(password)
+
+            db.session.add(new_user)
+            db.session.commit()
+            flash('Registration successful! You can now log in.')
+            return redirect(url_for('login'))
+        except Exception as e:
+            # Ini akan mencetak error spesifik ke log
+            print(f"Error during registration: {e}")
+            traceback.print_exc()
+            flash('Registration failed due to a server error. Please try again.')
             return redirect(url_for('register'))
-
-        private_key, public_key = create_keys()
-        new_user = User(username=username, public_key=public_key, private_key=private_key)
-        new_user.set_password(password)
-
-        db.session.add(new_user)
-        db.session.commit()
-        flash('Registration successful! You can now log in.')
-        return redirect(url_for('login'))
+            
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
