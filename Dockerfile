@@ -13,8 +13,7 @@ COPY . .
 
 # Perbaikan: Tambahkan langkah eksplisit untuk membuat database
 # Menggunakan perintah Python langsung untuk membuat tabel
-RUN python -c "from app import app, db; with app.app_context(): db.create_all()"
-
+RUN python -c "from app import app, db; app.app_context().push(); db.create_all();"
 # Beri tahu Docker bahwa container akan mendengarkan di port 5000
 EXPOSE 5000
 
