@@ -1,7 +1,16 @@
-# ... (kode deployment yang sudah ada)
-
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kriptografi-saas-deployment
 spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kriptografi-saas
   template:
+    metadata:
+      labels:
+        app: kriptografi-saas
     spec:
       containers:
         - name: kriptografi-saas
