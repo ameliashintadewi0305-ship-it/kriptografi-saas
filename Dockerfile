@@ -6,4 +6,4 @@ RUN chown -R 1001:0 /app && chmod -R g+rwX /app
 USER 1001
 COPY . .
 EXPOSE 5000
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--error-logfile", "-", "app:app"]

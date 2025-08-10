@@ -98,7 +98,7 @@ def register():
         except Exception as e:
             print(f"Error during registration: {e}")
             traceback.print_exc()
-            db.session.rollback() # Rollback jika ada error
+            db.session.rollback()
             flash('Registration failed due to a server error. Please try again.')
             return redirect(url_for('register'))
             
