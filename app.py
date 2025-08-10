@@ -9,21 +9,16 @@ from Crypto.Signature import pkcs1_15
 from Crypto.Hash import SHA256
 from base64 import b64encode, b64decode
 
-# Inisialisasi Flask
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
-
-# Konfigurasi Database
 db_path = os.environ.get('DATABASE_PATH', '/tmp/site.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 db = SQLAlchemy(app)
 
-# Inisialisasi Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-# Model Pengguna
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True, nullable=False)
@@ -37,7 +32,6 @@ class User(UserMixin, db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-# Model Pesan
 class Message(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     sender_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -47,7 +41,6 @@ class Message(db.Model):
     sender = db.relationship('User', foreign_keys=[sender_id], backref='sent_messages')
     recipient = db.relationship('User', foreign_keys=[recipient_id], backref='received_messages')
 
-# Fungsi utilitas untuk enkripsi/dekripsi
 def create_keys():
     key = RSA.generate(2048)
     private_key = key.export_key().decode('utf-8')
@@ -56,12 +49,12 @@ def create_keys():
 
 def encrypt_message(message, public_key):
     # Logika enkripsi AES-256 dan RSA
-    # (kode ini tidak diubah, asumsikan sudah benar)
+    # (Kode ini tidak diubah)
     return message
 
 def decrypt_message(encrypted_message, private_key):
     # Logika dekripsi
-    # (kode ini tidak diubah, asumsikan sudah benar)
+    # (Kode ini tidak diubah)
     return encrypted_message
 
 def sign_message(message, private_key):
@@ -70,12 +63,10 @@ def sign_message(message, private_key):
     signature = pkcs1_15.new(key).sign(h)
     return b64encode(signature).decode('utf-8')
 
-# Login Manager User Loader
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# Rute
 @app.route('/')
 def index():
     return render_template('index.html')
