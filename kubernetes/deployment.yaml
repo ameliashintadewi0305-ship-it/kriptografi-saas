@@ -2,8 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kriptografi-saas-deployment
-  labels:
-    app: kriptografi-saas
 spec:
   replicas: 1
   selector:
@@ -15,15 +13,10 @@ spec:
         app: kriptografi-saas
     spec:
       containers:
-      - name: kriptografi-saas-container
-        image: amelia0305/kriptografi-saas:latest 
-
-        ports:
-        - containerPort: 5000
-        resources:
-          requests:
-            cpu: "100m"
-            memory: "128Mi"
-          limits:
-            cpu: "500m"
-            memory: "256Mi"
+        - name: kriptografi-saas
+          image: image-registry.openshift-image-registry.svc:5000/amelia2344-dev/kriptografi-saas:latest
+          ports:
+            - containerPort: 5000
+          env:
+            - name: DATABASE_PATH
+              value: /tmp/site.db

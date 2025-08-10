@@ -1,1 +1,84 @@
-<title>Chat</title>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <div class="user-info">
+            Welcome, {{ username }}!
+        </div>
+        <nav>
+            <a href="{{ url_for('logout') }}">Logout</a>
+        </nav>
+    </header>
+    <main>
+        <aside class="sidebar">
+            <h2>Users</h2>
+            <ul>
+                {% for user in users %}
+                <li>
+                    <a href="#" class="user-link" data-username="{{ user.username }}">{{ user.username }}</a>
+                </li>
+                {% endfor %}
+            </ul>
+        </aside>
+        <section class="chat-area">
+            <h2>Messages</h2>
+            <div id="messages-list">
+                {% for message in messages %}
+                <div class="message {% if message.sender_id == session['user_id'] %}sent{% else %}received{% endif %}">
+                    <strong>{{ "You" if message.sender_id == session['user_id'] else User.query.get(message.sender_id).username }}:</strong>
+                    <div class="encrypted-text">{{ message.encrypted_message }}</div>
+                    <button class="decrypt-btn">Decrypt</button>
+                    <div class="decrypted-text" style="display:none;"></div>
+                </div>
+                {% endfor %}
+            </div>
+            <form action="{{ url_for('send_message') }}" method="post" id="message-form">
+                <input type="hidden" name="recipient" id="recipient-input">
+                <input type="text" name="message" placeholder="Type your message..." required>
+                <button type="submit">Send</button>
+            </form>
+        </section>
+    </main>
+    <script>
+        document.querySelectorAll('.user-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const recipientUsername = this.getAttribute('data-username');
+                document.getElementById('recipient-input').value = recipientUsername;
+                alert('Recipient set to ' + recipientUsername);
+            });
+        });
+
+        document.querySelectorAll('.decrypt-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const encryptedText = this.previousElementSibling.textContent;
+                const privateKey = `{{ user_private_key | safe }}`;
+                
+                fetch('/decrypt', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ encrypted_message: encryptedText, private_key: privateKey })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.decrypted_message) {
+                        const decryptedTextDiv = this.nextElementSibling;
+                        decryptedTextDiv.textContent = data.decrypted_message;
+                        decryptedTextDiv.style.display = 'block';
+                        this.style.display = 'none';
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+            });
+        });
+    </script>
+</body>
+</html>
