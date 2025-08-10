@@ -5,12 +5,18 @@ from Crypto.PublicKey import RSA
 from base64 import b64encode, b64decode
 import os
 
+# Create Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key-is-here'
-# Mengubah lokasi database ke direktori yang dapat ditulis oleh aplikasi
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////app/site.db'
+
+# Load secret key from environment variable, or use a default one
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-is-here')
+
+# Change database URI to use a path relative to the current working directory
+# This ensures it works both locally and on platforms like OpenShift
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(os.getcwd(), 'site.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Initialize SQLAlchemy
 db = SQLAlchemy(app)
 
 class User(db.Model):
@@ -33,11 +39,9 @@ def create_keys():
     return public_key, private_key
 
 with app.app_context():
-    # Pastikan direktori database ada sebelum membuat file
-    db_dir = os.path.dirname(app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:////', ''))
-    if not os.path.exists(db_dir):
-        os.makedirs(db_dir)
-    db.create_all()
+    # create the database file
+    if not os.path.exists('site.db'):
+        db.create_all()
 
 @app.route('/')
 def index():
@@ -91,10 +95,10 @@ def chat():
         return redirect(url_for('login'))
 
     users = User.query.all()
-    user_private_key = User.query.filter_by(username=session['username']).first().private_key
+    # Menambahkan perbaikan: tidak mengirim 'recipient' ke template secara default
     messages = Message.query.filter((Message.sender_id == session['user_id']) | (Message.recipient_id == session['user_id'])).all()
     
-    return render_template('chat.html', users=users, username=session['username'], user_private_key=user_private_key, messages=messages)
+    return render_template('chat.html', users=users, username=session['username'], messages=messages)
 
 @app.route('/send_message', methods=['POST'])
 def send_message():
@@ -129,4 +133,8 @@ def logout():
     return redirect(url_for('login'))
 
 if __name__ == '__main__':
+    # Add this part to handle the database creation on application startup.
+    # It ensures the database file is present before the app starts serving requests.
+    with app.app_context():
+        db.create_all()
     app.run(host='0.0.0.0', port=5000)
