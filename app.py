@@ -11,7 +11,7 @@ from base64 import b64encode, b64decode
 import traceback
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.urandom(24)  # Menggunakan kunci acak yang lebih aman
+app.config['SECRET_KEY'] = os.urandom(24)
 db_path = os.environ.get('DATABASE_PATH', '/tmp/site.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
