@@ -3,17 +3,18 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
 from Crypto.Signature import pkcs1_15
 from Crypto.Hash import SHA256
 from base64 import b64encode, b64decode
 import traceback
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your_secret_key'
+app.config['SECRET_KEY'] = os.urandom(24)  # Menggunakan kunci acak yang lebih aman
 db_path = os.environ.get('DATABASE_PATH', '/tmp/site.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 login_manager = LoginManager()
@@ -49,44 +50,21 @@ def create_keys():
     return private_key, public_key
 
 def encrypt_message(message, public_key):
-    # Logika enkripsi AES-GCM
     recipient_key = RSA.import_key(public_key)
-    aes_key = os.urandom(16)
-    cipher_aes = AES.new(aes_key, AES.MODE_GCM)
-    ciphertext, tag = cipher_aes.encrypt_and_digest(message.encode('utf-8'))
-    
-    # Enkripsi kunci AES dengan RSA public key
-    cipher_rsa = PKCS1_OAEP.new(recipient_key)
-    enc_aes_key = cipher_rsa.encrypt(aes_key)
-    
-    return b64encode(enc_aes_key + cipher_aes.nonce + tag + ciphertext).decode('utf-8')
+    cipher = PKCS1_OAEP.new(recipient_key)
+    encrypted_message = cipher.encrypt(message.encode('utf-8'))
+    return b64encode(encrypted_message).decode('utf-8')
 
 def decrypt_message(encrypted_message, private_key):
     try:
         private_key_obj = RSA.import_key(private_key)
-        
-        # Decode base64
-        decoded_message = b64decode(encrypted_message)
-        
-        # Ekstrak data terenkripsi
-        enc_aes_key = decoded_message[:256]
-        nonce = decoded_message[256:256+16]
-        tag = decoded_message[256+16:256+16+16]
-        ciphertext = decoded_message[256+16+16:]
-
-        # Dekripsi kunci AES dengan RSA private key
-        cipher_rsa = PKCS1_OAEP.new(private_key_obj)
-        aes_key = cipher_rsa.decrypt(enc_aes_key)
-
-        # Dekripsi pesan dengan kunci AES
-        cipher_aes = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
-        decrypted_message = cipher_aes.decrypt_and_verify(ciphertext, tag)
-        
+        cipher = PKCS1_OAEP.new(private_key_obj)
+        decrypted_message = cipher.decrypt(b64decode(encrypted_message))
         return decrypted_message.decode('utf-8')
     except Exception as e:
         print(f"Decryption error: {e}")
+        traceback.print_exc()
         return "Failed to decrypt message."
-
 
 def sign_message(message, private_key):
     key = RSA.import_key(private_key)
@@ -96,7 +74,7 @@ def sign_message(message, private_key):
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.query(User).get(int(user_id))
 
 @app.route('/')
 def index():
@@ -164,13 +142,20 @@ def chat(recipient_id):
         message_text = request.form.get('message')
         public_key_recipient = recipient.public_key
         
-        encrypted_message_text = encrypt_message(message_text, public_key_recipient)
-        signature = sign_message(message_text, current_user.private_key)
-        
-        new_message = Message(sender_id=current_user.id, recipient_id=recipient.id, encrypted_message=encrypted_message_text, signature=signature)
-        db.session.add(new_message)
-        db.session.commit()
-        return redirect(url_for('chat', recipient_id=recipient.id))
+        try:
+            encrypted_message_text = encrypt_message(message_text, public_key_recipient)
+            signature = sign_message(message_text, current_user.private_key)
+            
+            new_message = Message(sender_id=current_user.id, recipient_id=recipient.id, encrypted_message=encrypted_message_text, signature=signature)
+            db.session.add(new_message)
+            db.session.commit()
+            return redirect(url_for('chat', recipient_id=recipient.id))
+        except Exception as e:
+            print(f"Encryption/Signature Error: {e}")
+            traceback.print_exc()
+            db.session.rollback()
+            flash("Failed to send message.")
+            return redirect(url_for('chat', recipient_id=recipient.id))
 
     return render_template('chat.html', recipient=recipient, messages=all_messages, decrypt_message=decrypt_message)
 
