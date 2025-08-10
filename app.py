@@ -20,8 +20,6 @@ login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
 # Perbaikan: Mengganti @app.before_first_request
-with app.app_context():
-    db.create_all()
 
 # User Model
 class User(db.Model, UserMixin):
