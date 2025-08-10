@@ -166,12 +166,4 @@ def chat(recipient_id):
     return render_template('chat.html', recipient=recipient, messages=all_messages, decrypt_message=decrypt_message)
 
 if __name__ == '__main__':
-    with app.app_context():
-        try:
-            db_dir = os.path.dirname(app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', ''))
-            if not os.path.exists(db_dir):
-                os.makedirs(db_dir, exist_ok=True)
-            db.create_all()
-        except Exception as e:
-            print(f"Error creating database: {e}")
     app.run(host='0.0.0.0', port=5000, debug=True)
