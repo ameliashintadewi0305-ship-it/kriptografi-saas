@@ -3,9 +3,11 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from Crypto.PublicKey import RSA
 from base64 import b64encode, b64decode
+import os
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-is-here'
+# Mengubah lokasi database ke direktori yang dapat ditulis oleh aplikasi
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////app/site.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -31,6 +33,10 @@ def create_keys():
     return public_key, private_key
 
 with app.app_context():
+    # Pastikan direktori database ada sebelum membuat file
+    db_dir = os.path.dirname(app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:////', ''))
+    if not os.path.exists(db_dir):
+        os.makedirs(db_dir)
     db.create_all()
 
 @app.route('/')
