@@ -49,11 +49,15 @@ def create_keys():
     return private_key, public_key
 
 def encrypt_message(message, public_key):
-    # Logika enkripsi AES-256 dan RSA
-    return message
+    recipient_key = RSA.import_key(public_key)
+    cipher_rsa = AES.new(os.urandom(16), AES.MODE_EAX) # Dummy AES for example
+    encrypted_message = cipher_rsa.encrypt(message.encode('utf-8'))
+    return b64encode(encrypted_message).decode('utf-8')
 
 def decrypt_message(encrypted_message, private_key):
+    private_key_obj = RSA.import_key(private_key)
     # Logika dekripsi
+    # Ini hanya contoh, karena enkripsi di atas juga contoh
     return encrypted_message
 
 def sign_message(message, private_key):
@@ -77,18 +81,13 @@ def register():
         password = request.form.get('password')
         
         try:
-            existing_user = User.query.filter_by(username=username).first()
+            existing_user = db.session.query(User).filter_by(username=username).first()
             if existing_user:
                 flash('Username already exists. Please choose a different one.')
                 return redirect(url_for('register'))
 
             private_key, public_key = create_keys()
             
-            # Tambahkan print untuk debugging
-            print(f"Generated keys for user {username}:")
-            print(f"Public Key: {public_key[:50]}...")
-            print(f"Private Key: {private_key[:50]}...")
-
             new_user = User(username=username, public_key=public_key, private_key=private_key)
             new_user.set_password(password)
 
@@ -97,9 +96,9 @@ def register():
             flash('Registration successful! You can now log in.')
             return redirect(url_for('login'))
         except Exception as e:
-            # Ini akan mencetak error spesifik ke log
             print(f"Error during registration: {e}")
             traceback.print_exc()
+            db.session.rollback() # Rollback jika ada error
             flash('Registration failed due to a server error. Please try again.')
             return redirect(url_for('register'))
             
@@ -110,7 +109,7 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        user = User.query.filter_by(username=username).first()
+        user = db.session.query(User).filter_by(username=username).first()
         if user and user.check_password(password):
             login_user(user)
             return redirect(url_for('dashboard'))
@@ -121,7 +120,7 @@ def login():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    users = User.query.all()
+    users = db.session.query(User).filter(User.id != current_user.id).all()
     return render_template('dashboard.html', users=users)
 
 @app.route('/logout')
@@ -133,9 +132,9 @@ def logout():
 @app.route('/chat/<recipient_id>', methods=['GET', 'POST'])
 @login_required
 def chat(recipient_id):
-    recipient = User.query.get_or_404(recipient_id)
-    sent_messages = Message.query.filter_by(sender_id=current_user.id, recipient_id=recipient.id).all()
-    received_messages = Message.query.filter_by(sender_id=recipient.id, recipient_id=current_user.id).all()
+    recipient = db.session.query(User).get_or_404(recipient_id)
+    sent_messages = db.session.query(Message).filter_by(sender_id=current_user.id, recipient_id=recipient.id).all()
+    received_messages = db.session.query(Message).filter_by(sender_id=recipient.id, recipient_id=current_user.id).all()
     
     all_messages = sorted(sent_messages + received_messages, key=lambda msg: msg.id)
 
