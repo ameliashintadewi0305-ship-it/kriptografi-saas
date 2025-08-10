@@ -5,9 +5,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Create a temporary app to initialize the database
+# Create database during build
 COPY app.py .
-RUN python -c "from app import app, db; with app.app_context(): db.create_all()"
+COPY init_db.py .
+RUN python init_db.py
 
 # Final setup
 COPY . .
