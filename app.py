@@ -13,7 +13,7 @@ from base64 import b64encode, b64decode
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
 
-# Konfigurasi Database (perbaikan di sini)
+# Konfigurasi Database
 db_path = os.environ.get('DATABASE_PATH', '/tmp/site.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 db = SQLAlchemy(app)
@@ -150,5 +150,11 @@ def chat(recipient_id):
 
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()
+        try:
+            db_dir = os.path.dirname(app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', ''))
+            if not os.path.exists(db_dir):
+                os.makedirs(db_dir, exist_ok=True)
+            db.create_all()
+        except Exception as e:
+            print(f"Error creating database: {e}")
     app.run(host='0.0.0.0', port=5000, debug=True)
