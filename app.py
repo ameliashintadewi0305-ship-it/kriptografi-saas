@@ -14,7 +14,7 @@ import json
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-very-secret-key-that-should-be-strong'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/site.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////app/site.db'
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
