@@ -49,16 +49,44 @@ def create_keys():
     return private_key, public_key
 
 def encrypt_message(message, public_key):
+    # Logika enkripsi AES-GCM
     recipient_key = RSA.import_key(public_key)
-    cipher_rsa = AES.new(os.urandom(16), AES.MODE_EAX) # Dummy AES for example
-    encrypted_message = cipher_rsa.encrypt(message.encode('utf-8'))
-    return b64encode(encrypted_message).decode('utf-8')
+    aes_key = os.urandom(16)
+    cipher_aes = AES.new(aes_key, AES.MODE_GCM)
+    ciphertext, tag = cipher_aes.encrypt_and_digest(message.encode('utf-8'))
+    
+    # Enkripsi kunci AES dengan RSA public key
+    cipher_rsa = PKCS1_OAEP.new(recipient_key)
+    enc_aes_key = cipher_rsa.encrypt(aes_key)
+    
+    return b64encode(enc_aes_key + cipher_aes.nonce + tag + ciphertext).decode('utf-8')
 
 def decrypt_message(encrypted_message, private_key):
-    private_key_obj = RSA.import_key(private_key)
-    # Logika dekripsi
-    # Ini hanya contoh, karena enkripsi di atas juga contoh
-    return encrypted_message
+    try:
+        private_key_obj = RSA.import_key(private_key)
+        
+        # Decode base64
+        decoded_message = b64decode(encrypted_message)
+        
+        # Ekstrak data terenkripsi
+        enc_aes_key = decoded_message[:256]
+        nonce = decoded_message[256:256+16]
+        tag = decoded_message[256+16:256+16+16]
+        ciphertext = decoded_message[256+16+16:]
+
+        # Dekripsi kunci AES dengan RSA private key
+        cipher_rsa = PKCS1_OAEP.new(private_key_obj)
+        aes_key = cipher_rsa.decrypt(enc_aes_key)
+
+        # Dekripsi pesan dengan kunci AES
+        cipher_aes = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
+        decrypted_message = cipher_aes.decrypt_and_verify(ciphertext, tag)
+        
+        return decrypted_message.decode('utf-8')
+    except Exception as e:
+        print(f"Decryption error: {e}")
+        return "Failed to decrypt message."
+
 
 def sign_message(message, private_key):
     key = RSA.import_key(private_key)
@@ -122,12 +150,6 @@ def login():
 def dashboard():
     users = db.session.query(User).filter(User.id != current_user.id).all()
     return render_template('dashboard.html', users=users)
-
-@app.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    return redirect(url_for('index'))
 
 @app.route('/chat/<recipient_id>', methods=['GET', 'POST'])
 @login_required
