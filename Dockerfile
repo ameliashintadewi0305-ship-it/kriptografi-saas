@@ -1,21 +1,16 @@
-# Gunakan image Python 3.13 versi slim
 FROM python:3.13-slim
 
-# Atur direktori kerja di dalam container
 WORKDIR /app
 
-# Salin file requirements.txt dan install dependensi
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Salin semua file kode aplikasi (app.py, templates/, static/)
 COPY . .
 
-# Perbaikan: Tambahkan langkah eksplisit untuk membuat database
-# Menggunakan perintah Python langsung untuk membuat tabel
+# Perbaikan: Membuat tabel database secara eksplisit di Dockerfile
+# Ini akan memastikan tabel 'user' ada sebelum aplikasi dijalankan
 RUN python -c "from app import app, db; app.app_context().push(); db.create_all();"
-# Beri tahu Docker bahwa container akan mendengarkan di port 5000
+
 EXPOSE 5000
 
-# Jalankan aplikasi Anda
 CMD ["python", "app.py"]

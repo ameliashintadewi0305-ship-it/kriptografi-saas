@@ -19,14 +19,13 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# Perbaikan: Mengganti @app.before_first_request
-
 # User Model
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(20), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
     public_key = db.Column(db.String(2048), nullable=False)
+    private_key = db.Column(db.String(4096), nullable=False)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -68,18 +67,26 @@ def register():
         username = request.form.get('username')
         password = request.form.get('password')
         
+        # Generate new RSA key pair
         private_key = rsa.generate_private_key(
             public_exponent=65537,
             key_size=2048
         )
         public_key = private_key.public_key()
         
+        # Serialize keys to PEM format
         public_key_pem = public_key.public_bytes(
             encoding=Encoding.PEM,
             format=PublicFormat.SubjectPublicKeyInfo
         ).decode('utf-8')
+        
+        private_key_pem = private_key.private_bytes(
+            encoding=Encoding.PEM,
+            format=PrivateFormat.PKCS8,
+            encryption_algorithm=NoEncryption()
+        ).decode('utf-8')
 
-        user = User(username=username, public_key=public_key_pem)
+        user = User(username=username, public_key=public_key_pem, private_key=private_key_pem)
         user.set_password(password)
         
         db.session.add(user)
@@ -138,6 +145,36 @@ def encrypt_message(username):
         'ciphertext': b64encode(ciphertext).decode('utf-8'),
         'tag': b64encode(tag).decode('utf-8')
     })
+
+@app.route('/api/decrypt', methods=['POST'])
+@login_required
+def decrypt_message():
+    data = request.json
+    encrypted_aes_key = b64decode(data.get('encrypted_aes_key'))
+    nonce = b64decode(data.get('nonce'))
+    ciphertext = b64decode(data.get('ciphertext'))
+    tag = b64decode(data.get('tag'))
+
+    current_user_private_key = load_pem_private_key(current_user.private_key.encode('utf-8'), password=None, backend=default_backend())
+
+    try:
+        aes_key = current_user_private_key.decrypt(
+            encrypted_aes_key,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+
+        cipher = Cipher(algorithms.AES(aes_key), modes.GCM(nonce, tag), backend=default_backend())
+        decryptor = cipher.decryptor()
+        plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+
+        return jsonify({'plaintext': plaintext.decode('utf-8')})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
