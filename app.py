@@ -16,17 +16,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# --- INI ADALAH BAGIAN PENTING YANG DITAMBAHKAN ---
-# Fungsi ini akan dijalankan saat startup aplikasi untuk memastikan
-# tabel database ada.
-with app.app_context():
-    try:
-        db.create_all()
-        print("Database tables created successfully.", file=sys.stderr)
-    except Exception as e:
-        print(f"Error creating database tables: {e}", file=sys.stderr)
-        traceback.print_exc(file=sys.stderr)
-
 # Konfigurasi Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -145,9 +134,5 @@ def dashboard():
             
     return render_template('dashboard.html', original_text=original_text, encrypted_text=encrypted_text, decrypted_text=decrypted_text)
 
-# Rute scanner dihapus karena membutuhkan library socket yang tidak terpasang.
-# Jika Anda ingin menambahkan ini kembali, tambahkan 'socket' di requirements.txt.
-
-# Tambahkan ini untuk menjalankan secara lokal saat debugging, tapi gunicorn yang akan digunakan di OpenShift
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
