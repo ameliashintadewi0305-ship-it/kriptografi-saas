@@ -10,6 +10,7 @@ from Crypto.Hash import SHA256
 from base64 import b64encode, b64decode
 import traceback
 
+# Inisialisasi Aplikasi Flask
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
 db_path = os.environ.get('DATABASE_PATH', '/data/site.db')
@@ -17,10 +18,12 @@ app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
+# Konfigurasi Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
+# --- Model Database ---
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True, nullable=False)
@@ -43,6 +46,7 @@ class Message(db.Model):
     sender = db.relationship('User', foreign_keys=[sender_id], backref='sent_messages')
     recipient = db.relationship('User', foreign_keys=[recipient_id], backref='received_messages')
 
+# --- Fungsi Kriptografi ---
 def create_keys():
     key = RSA.generate(2048)
     private_key = key.export_key().decode('utf-8')
@@ -72,10 +76,12 @@ def sign_message(message, private_key):
     signature = pkcs1_15.new(key).sign(h)
     return b64encode(signature).decode('utf-8')
 
+# --- Fungsi User Loader untuk Flask-Login ---
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.query(User).get(int(user_id))
 
+# --- Rute Aplikasi ---
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -126,44 +132,3 @@ def login():
 @app.route('/logout')
 @login_required
 def logout():
-    logout_user()
-    return redirect(url_for('index'))
-
-@app.route('/dashboard')
-@login_required
-def dashboard():
-    users = db.session.query(User).filter(User.id != current_user.id).all()
-    return render_template('dashboard.html', users=users)
-
-@app.route('/chat/<recipient_id>', methods=['GET', 'POST'])
-@login_required
-def chat(recipient_id):
-    recipient = db.session.query(User).get_or_404(recipient_id)
-    sent_messages = db.session.query(Message).filter_by(sender_id=current_user.id, recipient_id=recipient.id).all()
-    received_messages = db.session.query(Message).filter_by(sender_id=recipient.id, recipient_id=current_user.id).all()
-    
-    all_messages = sorted(sent_messages + received_messages, key=lambda msg: msg.id)
-
-    if request.method == 'POST':
-        message_text = request.form.get('message')
-        public_key_recipient = recipient.public_key
-        
-        try:
-            encrypted_message_text = encrypt_message(message_text, public_key_recipient)
-            signature = sign_message(message_text, current_user.private_key)
-            
-            new_message = Message(sender_id=current_user.id, recipient_id=recipient.id, encrypted_message=encrypted_message_text, signature=signature)
-            db.session.add(new_message)
-            db.session.commit()
-            return redirect(url_for('chat', recipient_id=recipient.id))
-        except Exception as e:
-            print(f"Encryption/Signature Error: {e}")
-            traceback.print_exc()
-            db.session.rollback()
-            flash("Failed to send message.")
-            return redirect(url_for('chat', recipient_id=recipient.id))
-
-    return render_template('chat.html', recipient=recipient, messages=all_messages, decrypt_message=decrypt_message)
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)

@@ -4,9 +4,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
-# Membuat direktori data dan database saat build
+# Membuat direktori data dengan izin yang benar
 RUN mkdir -p /data && chown -R 1001:0 /data && chmod -R g+rwX /data
-RUN python -c "from app import app, db; with app.app_context(): db.create_all()"
+
+# Menjalankan skrip Python untuk membuat tabel database
+RUN python init_db.py
 
 # Mengatur user untuk menjalankan aplikasi
 USER 1001
