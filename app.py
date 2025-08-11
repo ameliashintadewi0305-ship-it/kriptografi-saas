@@ -6,8 +6,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES, PKCS1_OAEP
 from base64 import b64encode, b64decode
-import traceback
+import traceback # <--- Tambahkan ini
 import socket
+import sys # <--- Tambahkan ini
 
 # Inisialisasi Aplikasi Flask
 app = Flask(__name__)
@@ -83,6 +84,8 @@ def register():
             return redirect(url_for('login'))
         except Exception as e:
             db.session.rollback()
+            print(f"Error during registration: {e}", file=sys.stderr) # <--- Tambahkan ini
+            traceback.print_exc(file=sys.stderr) # <--- Tambahkan ini
             flash('Registration failed due to a server error. Please try again.')
             return redirect(url_for('register'))
             
@@ -113,7 +116,7 @@ def dashboard():
     encrypted_text = None
     decrypted_text = None
     original_text = None
-    key = b'mysecretpassword'  # Kunci sederhana, bisa diganti
+    key = b'mysecretpassword'
 
     if request.method == 'POST':
         action = request.form.get('action')
@@ -136,9 +139,8 @@ def dashboard():
 @app.route('/scanner')
 @login_required
 def scanner():
-    # Contoh sederhana port scanning menggunakan modul socket
-    host = 'kriptografi-saas-service-amelia2344-dev.apps.rm3.7wse.p1.openshiftapps.com'
-    ports_to_check = [80, 443, 5000] # Ganti dengan port yang relevan
+    host = 'kriptografi-saas-deployment-amelia2344-dev.apps.rm3.7wse.p1.openshiftapps.com'
+    ports_to_check = [80, 443, 5000]
     scan_results = []
     
     for port in ports_to_check:
@@ -157,3 +159,4 @@ if __name__ == '__main__':
     with app.app_context():
         db.create_all()
     app.run(host='0.0.0.0', port=5000, debug=True)
+
