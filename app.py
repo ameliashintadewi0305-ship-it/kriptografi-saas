@@ -132,3 +132,6 @@ def login():
 @app.route('/logout')
 @login_required
 def logout():
+     # Pastikan baris ini diindentasi dengan 4 spasi
+    logout_user()
+    return redirect(url_for('index'))
