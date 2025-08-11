@@ -3,12 +3,10 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from Crypto.PublicKey import RSA
-from Crypto.Cipher import AES, PKCS1_OAEP
+from Crypto.Cipher import AES
 from base64 import b64encode, b64decode
-import traceback # <--- Tambahkan ini
-import socket
-import sys # <--- Tambahkan ini
+import traceback
+import sys
 
 # Inisialisasi Aplikasi Flask
 app = Flask(__name__)
@@ -17,6 +15,17 @@ db_path = os.environ.get('DATABASE_PATH', '/data/site.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+
+# --- INI ADALAH BAGIAN PENTING YANG DITAMBAHKAN ---
+# Fungsi ini akan dijalankan saat startup aplikasi untuk memastikan
+# tabel database ada.
+with app.app_context():
+    try:
+        db.create_all()
+        print("Database tables created successfully.", file=sys.stderr)
+    except Exception as e:
+        print(f"Error creating database tables: {e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
 
 # Konfigurasi Flask-Login
 login_manager = LoginManager()
@@ -51,7 +60,7 @@ def decrypt_aes(encrypted_text, key):
         cipher = AES.new(key, AES.MODE_EAX, nonce=nonce)
         decrypted_text = cipher.decrypt_and_verify(ciphertext, tag)
         return decrypted_text.decode('utf-8')
-    except (ValueError, KeyError) as e:
+    except (ValueError, KeyError):
         return "Decryption failed. Invalid key or encrypted text."
 
 # --- Fungsi User Loader untuk Flask-Login ---
@@ -84,8 +93,8 @@ def register():
             return redirect(url_for('login'))
         except Exception as e:
             db.session.rollback()
-            print(f"Error during registration: {e}", file=sys.stderr) # <--- Tambahkan ini
-            traceback.print_exc(file=sys.stderr) # <--- Tambahkan ini
+            print(f"Error during registration: {e}", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
             flash('Registration failed due to a server error. Please try again.')
             return redirect(url_for('register'))
             
@@ -136,27 +145,9 @@ def dashboard():
             
     return render_template('dashboard.html', original_text=original_text, encrypted_text=encrypted_text, decrypted_text=decrypted_text)
 
-@app.route('/scanner')
-@login_required
-def scanner():
-    host = 'kriptografi-saas-deployment-amelia2344-dev.apps.rm3.7wse.p1.openshiftapps.com'
-    ports_to_check = [80, 443, 5000]
-    scan_results = []
-    
-    for port in ports_to_check:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1)
-        result = sock.connect_ex((host, port))
-        
-        if result == 0:
-            scan_results.append({'port': port, 'status': 'Open', 'security': 'Encryption (TLS/SSL)' if port == 443 else 'No encryption'})
-        else:
-            scan_results.append({'port': port, 'status': 'Closed', 'security': 'N/A'})
-            
-    return render_template('scanner.html', results=scan_results)
+# Rute scanner dihapus karena membutuhkan library socket yang tidak terpasang.
+# Jika Anda ingin menambahkan ini kembali, tambahkan 'socket' di requirements.txt.
 
+# Tambahkan ini untuk menjalankan secara lokal saat debugging, tapi gunicorn yang akan digunakan di OpenShift
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     app.run(host='0.0.0.0', port=5000, debug=True)
-
