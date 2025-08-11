@@ -7,6 +7,12 @@ COPY . .
 # Membuat direktori data dengan izin yang benar
 RUN mkdir -p /data && chown -R 1001:0 /data && chmod -R g+rwX /data
 
+# --- TAMBAHAN BARU ---
+# Memberikan izin tulis universal ke direktori data
+# Ini memastikan kontainer dapat menulis ke volume yang terpasang
+RUN chmod -R 777 /data
+# --- END TAMBAHAN BARU ---
+
 # Menjalankan skrip Python untuk membuat tabel database
 RUN python init_db.py
 
