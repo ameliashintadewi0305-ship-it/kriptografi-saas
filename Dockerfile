@@ -7,11 +7,5 @@ COPY . .
 # Membuat direktori /data dan memberikan izin tulis universal
 RUN mkdir -p /data && chmod -R 777 /data
 
-# Membuat skrip startup menjadi executable
-COPY wrapper.sh .
-RUN chmod +x wrapper.sh
-
 EXPOSE 5000
-
-# Perintah startup menggunakan skrip wrapper
-CMD ["./wrapper.sh"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
