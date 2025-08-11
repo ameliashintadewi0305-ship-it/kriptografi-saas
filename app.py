@@ -1,12 +1,10 @@
 import os
-import sys
-import traceback
-from base64 import b64encode, b64decode
-from Crypto.Cipher import AES
 from flask import Flask, render_template, request, redirect, url_for, flash
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from Crypto.Cipher import AES
+from base64 import b64encode, b64decode
 
 # Inisialisasi Aplikasi Flask
 app = Flask(__name__)
@@ -15,16 +13,6 @@ db_path = os.environ.get('DATABASE_PATH', '/data/site.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
-
-# Inisialisasi database saat startup
-# Ini adalah perbaikan penting.
-with app.app_context():
-    try:
-        db.create_all()
-        print("Database tables created successfully.", file=sys.stderr)
-    except Exception as e:
-        print(f"Error creating database tables: {e}", file=sys.stderr)
-        traceback.print_exc(file=sys.stderr)
 
 # Konfigurasi Flask-Login
 login_manager = LoginManager()
@@ -92,8 +80,6 @@ def register():
             return redirect(url_for('login'))
         except Exception as e:
             db.session.rollback()
-            print(f"Error during registration: {e}", file=sys.stderr)
-            traceback.print_exc(file=sys.stderr)
             flash('Registration failed due to a server error. Please try again.')
             return redirect(url_for('register'))
             
@@ -145,4 +131,6 @@ def dashboard():
     return render_template('dashboard.html', original_text=original_text, encrypted_text=encrypted_text, decrypted_text=decrypted_text)
 
 if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
     app.run(host='0.0.0.0', port=5000, debug=True)
