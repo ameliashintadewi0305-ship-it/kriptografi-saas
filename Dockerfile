@@ -7,7 +7,6 @@ COPY . .
 # Membuat direktori /data dan memberikan izin tulis universal
 RUN mkdir -p /data && chmod -R 777 /data
 
-# Mengatur user untuk menjalankan aplikasi
-USER 1001
-EXPOSE 5000
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+# Perintah CMD yang diperbaiki. Ini akan menjalankan skrip inisialisasi
+# dan kemudian memulai gunicorn.
+CMD ["/bin/sh", "-c", "python -c 'from app import db, app, User; with app.app_context(): db.create_all()' && gunicorn --bind 0.0.0.0:5000 app:app"]
