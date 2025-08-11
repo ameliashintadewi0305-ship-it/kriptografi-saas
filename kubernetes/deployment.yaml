@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kriptografi-saas-deployment
+  labels:
+    app: kriptografi-saas
 spec:
   replicas: 1
   selector:
@@ -13,14 +15,14 @@ spec:
         app: kriptografi-saas
     spec:
       containers:
-        - name: kriptografi-saas
-          image: kriptografi-saas:latest
-          ports:
-            - containerPort: 5000
-          volumeMounts:
-            - name: sqlite-storage
-              mountPath: /tmp
-      volumes:
+      - name: kriptografi-saas
+        image: kriptografi-saas:latest
+        ports:
+        - containerPort: 5000
+        volumeMounts:
         - name: sqlite-storage
-          persistentVolumeClaim:
-            claimName: sqlite-pvc
+          mountPath: /data
+      volumes:
+      - name: sqlite-storage
+        persistentVolumeClaim:
+          claimName: sqlite-pvc
