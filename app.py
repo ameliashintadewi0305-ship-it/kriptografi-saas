@@ -4,11 +4,10 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from Crypto.PublicKey import RSA
-from Crypto.Cipher import PKCS1_OAEP
-from Crypto.Signature import pkcs1_15
-from Crypto.Hash import SHA256
+from Crypto.Cipher import AES, PKCS1_OAEP
 from base64 import b64encode, b64decode
 import traceback
+import socket
 
 # Inisialisasi Aplikasi Flask
 app = Flask(__name__)
@@ -28,8 +27,6 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
-    public_key = db.Column(db.Text, nullable=False)
-    private_key = db.Column(db.Text, nullable=False)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -37,44 +34,24 @@ class User(UserMixin, db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-class Message(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    sender_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    recipient_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    encrypted_message = db.Column(db.Text, nullable=False)
-    signature = db.Column(db.Text, nullable=False)
-    sender = db.relationship('User', foreign_keys=[sender_id], backref='sent_messages')
-    recipient = db.relationship('User', foreign_keys=[recipient_id], backref='received_messages')
+# --- Fungsi Kriptografi Sederhana ---
+def encrypt_aes(plaintext, key):
+    cipher = AES.new(key, AES.MODE_EAX)
+    nonce = cipher.nonce
+    ciphertext, tag = cipher.encrypt_and_digest(plaintext.encode('utf-8'))
+    return b64encode(nonce + tag + ciphertext).decode('utf-8')
 
-# --- Fungsi Kriptografi ---
-def create_keys():
-    key = RSA.generate(2048)
-    private_key = key.export_key().decode('utf-8')
-    public_key = key.publickey().export_key().decode('utf-8')
-    return private_key, public_key
-
-def encrypt_message(message, public_key):
-    recipient_key = RSA.import_key(public_key)
-    cipher = PKCS1_OAEP.new(recipient_key)
-    encrypted_message = cipher.encrypt(message.encode('utf-8'))
-    return b64encode(encrypted_message).decode('utf-8')
-
-def decrypt_message(encrypted_message, private_key):
+def decrypt_aes(encrypted_text, key):
     try:
-        private_key_obj = RSA.import_key(private_key)
-        cipher = PKCS1_OAEP.new(private_key_obj)
-        decrypted_message = cipher.decrypt(b64decode(encrypted_message))
-        return decrypted_message.decode('utf-8')
-    except Exception as e:
-        print(f"Decryption error: {e}")
-        traceback.print_exc()
-        return "Failed to decrypt message."
-
-def sign_message(message, private_key):
-    key = RSA.import_key(private_key)
-    h = SHA256.new(message.encode('utf-8'))
-    signature = pkcs1_15.new(key).sign(h)
-    return b64encode(signature).decode('utf-8')
+        data = b64decode(encrypted_text)
+        nonce = data[:16]
+        tag = data[16:32]
+        ciphertext = data[32:]
+        cipher = AES.new(key, AES.MODE_EAX, nonce=nonce)
+        decrypted_text = cipher.decrypt_and_verify(ciphertext, tag)
+        return decrypted_text.decode('utf-8')
+    except (ValueError, KeyError) as e:
+        return "Decryption failed. Invalid key or encrypted text."
 
 # --- Fungsi User Loader untuk Flask-Login ---
 @login_manager.user_loader
@@ -91,16 +68,13 @@ def register():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        
         try:
             existing_user = db.session.query(User).filter_by(username=username).first()
             if existing_user:
                 flash('Username already exists. Please choose a different one.')
                 return redirect(url_for('register'))
 
-            private_key, public_key = create_keys()
-            
-            new_user = User(username=username, public_key=public_key, private_key=private_key)
+            new_user = User(username=username)
             new_user.set_password(password)
 
             db.session.add(new_user)
@@ -108,8 +82,6 @@ def register():
             flash('Registration successful! You can now log in.')
             return redirect(url_for('login'))
         except Exception as e:
-            print(f"Error during registration: {e}")
-            traceback.print_exc()
             db.session.rollback()
             flash('Registration failed due to a server error. Please try again.')
             return redirect(url_for('register'))
@@ -132,6 +104,56 @@ def login():
 @app.route('/logout')
 @login_required
 def logout():
-     # Pastikan baris ini diindentasi dengan 4 spasi
     logout_user()
     return redirect(url_for('index'))
+
+@app.route('/dashboard', methods=['GET', 'POST'])
+@login_required
+def dashboard():
+    encrypted_text = None
+    decrypted_text = None
+    original_text = None
+    key = b'mysecretpassword'  # Kunci sederhana, bisa diganti
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+        input_text = request.form.get('text_input')
+        
+        if action == 'encrypt':
+            original_text = input_text
+            if original_text:
+                encrypted_text = encrypt_aes(original_text, key)
+                flash("Text encrypted successfully using AES.")
+        
+        elif action == 'decrypt':
+            encrypted_text = input_text
+            if encrypted_text:
+                decrypted_text = decrypt_aes(encrypted_text, key)
+                flash("Text decrypted successfully using AES.")
+            
+    return render_template('dashboard.html', original_text=original_text, encrypted_text=encrypted_text, decrypted_text=decrypted_text)
+
+@app.route('/scanner')
+@login_required
+def scanner():
+    # Contoh sederhana port scanning menggunakan modul socket
+    host = 'kriptografi-saas-service-amelia2344-dev.apps.rm3.7wse.p1.openshiftapps.com'
+    ports_to_check = [80, 443, 5000] # Ganti dengan port yang relevan
+    scan_results = []
+    
+    for port in ports_to_check:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)
+        result = sock.connect_ex((host, port))
+        
+        if result == 0:
+            scan_results.append({'port': port, 'status': 'Open', 'security': 'Encryption (TLS/SSL)' if port == 443 else 'No encryption'})
+        else:
+            scan_results.append({'port': port, 'status': 'Closed', 'security': 'N/A'})
+            
+    return render_template('scanner.html', results=scan_results)
+
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    app.run(host='0.0.0.0', port=5000, debug=True)

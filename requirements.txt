@@ -1,6 +1,5 @@
 Flask
 Flask-SQLAlchemy
+Flask-Login
 pycryptodome
 gunicorn
-Flask-Login
-Werkzeug
